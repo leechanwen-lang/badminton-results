@@ -1,22 +1,113 @@
-<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>羽球成績查詢｜連線測試版4.0</title><style>
-*{box-sizing:border-box}body{margin:0;background:#f2f5f8;color:#182331;font-family:system-ui,-apple-system,"Microsoft JhengHei",sans-serif}.wrap{max-width:720px;margin:auto;padding:16px}header{background:#154a73;color:#fff;padding:24px 18px;border-radius:16px}h1{font-size:22px;margin:0 0 8px}header p{margin:0;font-size:14px;opacity:.9}section{background:#fff;padding:17px;border-radius:14px;margin-top:15px;box-shadow:0 2px 10px #0001}.tabs{display:flex;gap:8px}button{border:0;border-radius:9px;padding:11px 15px;background:#e9eff5;color:#234;cursor:pointer;font-size:16px}.tabs button{flex:1}.active{background:#1769a1;color:white}label{display:block;font-weight:700;margin:15px 0 6px}input,select{box-sizing:border-box;width:100%;padding:12px;font-size:17px;border:1px solid #bccbd8;border-radius:9px;background:#fff}.muted{color:#637383;font-size:13px;line-height:1.6}.match{border:1px solid #dce5ed;border-radius:12px;padding:14px;margin:12px 0}.top{display:flex;justify-content:space-between;gap:8px;font-weight:700}.side{display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid #eef1f5}.score{font-size:22px;font-weight:800}.meta{color:#536879;font-size:13px;margin-top:7px}.pill{display:inline-block;padding:3px 9px;border-radius:15px;background:#e8f4ed;color:#207349;font-size:12px;white-space:nowrap}.warn{background:#fff5dd;color:#8a6014}.choice{display:block;width:100%;text-align:left;margin:7px 0;border:1px solid #dce5ed;background:#f8fbfd}.choice strong{display:block}.notice{padding:10px;background:#fff6df;border-radius:8px;margin-top:10px}.smallbtn{font-size:14px;margin-top:10px}#results{min-height:60px}[hidden]{display:none!important}</style></head><body><div class="wrap"><header><h1>🏸 羽球賽程與成績查詢</h1><p>系統測試版－非正式比賽成績｜匿名資料 4.1</p><p id="loadStatus" style="margin-top:8px">正在讀取比賽資料…</p></header><section class="tabs"><button id="navSearch" class="active" onclick="viewPage(false)">個人成績查詢</button><button id="navBracket" onclick="viewPage(true)">賽程表</button></section><section id="searchPanel"><div class="tabs"><button id="nameBtn" class="active" onclick="setMode('name')">選手姓名</button><button id="schoolBtn" onclick="setMode('school')">學校名稱</button></div><label for="group">比賽組別</label><select id="group" onchange="resetSchool();draw()"><option value="">請選擇組別</option></select><label for="q" id="qlabel">選手姓名</label><input id="q" placeholder="輸入選手姓名" oninput="resetSchool();draw()" autocomplete="off"><div class="muted" style="margin-top:9px">先選組別，再輸入姓名或學校。若同組有同名選手，會請你再選學校；雙打任一位選手都能查詢。</div><div id="schoolPick"></div></section><section id="resultPanel"><div id="count" class="muted"></div><div id="results"></div></section><section id="bracket" hidden><h2>賽程及晉級表</h2><label>比賽組別（直接點選）</label><div class="tabs"><button id="singleTab" onclick="chooseBracket('single')">國中男單</button><button id="doubleTab" class="active" onclick="chooseBracket('double')">國中男雙</button></div><p class="notice">匿名測試期間，原始籤表暫不公開。以下為虛構晉級圖示意。</p><div id="doubleBracket"><p>選手A／B ─┐</p><p>　　　　　 ├─ 晉級組合A／B</p><p>選手C／D ─┘</p></div><div id="singleBracket" hidden><p>選手A ─┐</p><p>　　　 ├─ 晉級選手A</p><p>選手B ─┘</p></div></section></div><script>let rows=[];
-let mode='name', selectedSchool='';const e=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const groupSel=document.getElementById('group');
-function parseCSV(text){let records=[],row=[],field='',quoted=false;text=text.replace(/^\uFEFF/,'');for(let i=0;i<text.length;i++){let c=text[i];if(c==='"'){if(quoted&&text[i+1]==='"'){field+='"';i++;}else quoted=!quoted;}else if(!quoted&&c===','){row.push(field);field='';}else if(!quoted&&(c==='\n'||c==='\r')){if(c==='\r'&&text[i+1]==='\n')i++;row.push(field);records.push(row);row=[];field='';}else field+=c;}if(field||row.length){row.push(field);records.push(row);}return records;}
-async function loadMatches(){try{const response=await fetch('./matches.csv',{cache:'no-store'});if(!response.ok)throw Error('HTTP '+response.status);const data=parseCSV(await response.text());if(data[0]?.[2]!=='組別'||data[0]?.length!==17)throw Error('CSV 格式不符');rows=data.slice(1).filter(r=>r.length===17&&r[0].trim()).map(r=>Object.fromEntries(r.map((v,i)=>[String.fromCharCode(65+i),v.trim()])));groupSel.innerHTML='<option value="">請選擇組別</option>';[...new Set(rows.map(r=>r.C).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'zh-Hant')).forEach(g=>{let o=document.createElement('option');o.value=g;o.textContent=g;groupSel.appendChild(o)});document.getElementById('loadStatus').textContent='已載入 '+rows.length+' 場比賽';draw();}catch(err){document.getElementById('loadStatus').textContent='無法讀取 matches.csv，請確認網站已上傳資料檔。';}}
-function resetSchool(){selectedSchool=''}
-function setMode(v){mode=v;resetSchool();document.getElementById('q').value='';draw()}
-function draw(){document.getElementById('nameBtn').classList.toggle('active',mode==='name');document.getElementById('schoolBtn').classList.toggle('active',mode==='school');let q=document.getElementById('q'),group=groupSel.value,term=q.value.trim();q.placeholder=mode==='name'?'輸入選手姓名':'輸入學校名稱';document.getElementById('qlabel').textContent=mode==='name'?'選手姓名':'學校名稱';let count=document.getElementById('count'),out=document.getElementById('results'),pick=document.getElementById('schoolPick');pick.innerHTML='';out.innerHTML='';if(!group){count.textContent='請先選擇比賽組別';return}if(!term){count.textContent='請輸入'+(mode==='name'?'選手姓名':'學校名稱');return}
-let scoped=rows.filter(r=>r.C===group);let matches=[];
-if(mode==='name'){
-const sideHits=[];for(const r of scoped){if([r.I,r.K].some(x=>String(x||'').includes(term)))sideHits.push({r,school:r.J});if([r.O,r.Q].some(x=>String(x||'').includes(term)))sideHits.push({r,school:r.P})}
-const schools=[...new Set(sideHits.map(x=>x.school).filter(Boolean))];if(schools.length>1&&!selectedSchool){pick.innerHTML='<div class="notice">找到不同學校的同名／近似姓名選手，請選擇學校：</div>'+schools.map((school,i)=>'<button class="choice" data-index="'+i+'">'+e(school)+'</button>').join('');pick.querySelectorAll('button').forEach(b=>b.onclick=()=>{selectedSchool=schools[Number(b.dataset.index)];draw()});count.textContent='請先確認選手所屬學校';return}
-if(selectedSchool){pick.innerHTML='<div class="meta">目前學校：'+e(selectedSchool)+' <button class="smallbtn" id="changeSchool">更換學校</button></div>';pick.querySelector('button').onclick=()=>{resetSchool();draw()}}
-matches=[...new Set(sideHits.filter(x=>!selectedSchool||x.school===selectedSchool).map(x=>x.r))];
-}else matches=scoped.filter(r=>[r.J,r.P].some(x=>String(x||'').includes(term)));
-count.textContent='找到 '+matches.length+' 場相關比賽';out.innerHTML=matches.slice(0,300).map(r=>{let done=r.L!==''&&r.N!==''&&!(r.L==='0'&&r.N==='0');return `<article class="match"><div class="top"><span>${e(r.C)}</span><span class="pill ${done?'':'warn'}">${done?'已記分':'尚無比分'}</span></div><div class="meta">${e(r.D)}　${e(r.F)} ${e(r.G)}　場地 ${e(r.H)}</div><div class="side"><div>${e([r.I,r.K].filter(Boolean).join('／'))}<div class="muted">${e(r.J)}</div></div><span class="score">${e(r.L||'—')}</span></div><div class="side"><div>${e([r.O,r.Q].filter(Boolean).join('／'))}<div class="muted">${e(r.P)}</div></div><span class="score">${e(r.N||'—')}</span></div>${r.S?`<div class="meta">場控表勝方：${e(r.S)}</div>`:''}</article>`}).join('')||(matches.length?'':'<p class="muted">找不到符合的比賽，請確認組別、姓名或學校。</p>');if(matches.length>300)out.insertAdjacentHTML('beforeend','<p class="muted">僅顯示前300場，請縮小搜尋範圍。</p>')}
-draw();
-loadMatches();
-function chooseBracket(v){document.getElementById('doubleBracket').hidden=v!=='double';document.getElementById('singleBracket').hidden=v!=='single';document.getElementById('doubleTab').classList.toggle('active',v==='double');document.getElementById('singleTab').classList.toggle('active',v==='single');}
-function viewPage(b){document.getElementById("bracket").hidden=!b;document.getElementById("searchPanel").hidden=b;document.getElementById("resultPanel").hidden=b;document.getElementById("navSearch").classList.toggle("active",!b);document.getElementById("navBracket").classList.toggle("active",b);}
-</script></body></html>
+
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>羽球錦標賽</title>
+<style>
+*{box-sizing:border-box}
+body{
+  margin:0;
+  background:#f0f5f3;
+  font-family:Arial,sans-serif;
+  color:#203b35;
+}
+main{
+  max-width:600px;
+  margin:auto;
+  padding:16px;
+}
+h1{
+  text-align:center;
+  font-size:28px;
+  margin-bottom:8px;
+}
+p{
+  text-align:center;
+  color:#666;
+}
+h2{
+  font-size:22px;
+  margin-top:24px;
+  border-left:5px solid #287b65;
+  padding-left:10px;
+}
+.grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:10px;
+}
+a{
+  display:block;
+  padding:16px 8px;
+  background:white;
+  border:1px solid #b8d3c9;
+  border-radius:10px;
+  text-align:center;
+  text-decoration:none;
+  color:#174c3d;
+  font-size:20px;
+  font-weight:bold;
+}
+a.venue{
+  background:#246b55;
+  color:white;
+  font-size:23px;
+}
+a:active{
+  opacity:0.65;
+}
+footer{
+  text-align:center;
+  color:#777;
+  margin:25px 0;
+  font-size:14px;
+}
+</style>
+</head>
+<body>
+<main>
+
+<h1>羽球錦標賽</h1>
+<p>賽程及比賽成績查閱</p>
+
+<a class="venue" href="114場地時間表.pdf">場地時間表</a>
+
+<h2>國小組</h2>
+<div class="grid">
+<a href="小高男單.pdf">小高男單</a>
+<a href="小高男雙.pdf">小高男雙</a>
+<a href="小高女單.pdf">小高女單</a>
+<a href="小高女雙.pdf">小高女雙</a>
+<a href="小中男單.pdf">小中男單</a>
+<a href="小中男雙.pdf">小中男雙</a>
+<a href="小中女單.pdf">小中女單</a>
+<a href="小中女雙.pdf">小中女雙</a>
+</div>
+
+<h2>國中組</h2>
+<div class="grid">
+<a href="國中男單.pdf">國中男單</a>
+<a href="國中男雙.pdf">國中男雙</a>
+<a href="國中女單.pdf">國中女單</a>
+<a href="國中女雙.pdf">國中女雙</a>
+<a href="國中混雙.pdf">國中混雙</a>
+</div>
+
+<h2>高中組</h2>
+<div class="grid">
+<a href="高中男單.pdf">高中男單</a>
+<a href="高中男雙.pdf">高中男雙</a>
+<a href="高中女單.pdf">高中女單</a>
+<a href="高中女雙.pdf">高中女雙</a>
+<a href="高中混雙.pdf">高中混雙</a>
+</div>
+
+<footer>
+點選組別，即可查看預賽、複賽及比賽成績
+</footer>
+
+</main>
+</body>
+</html>
